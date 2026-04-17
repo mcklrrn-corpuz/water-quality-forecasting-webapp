@@ -51,11 +51,9 @@ if "GRU" in model_choice:
 else:
     st.info("Baseline model selected: simpler and stable predictions.")
 
-feature = st.selectbox("Select parameter", FEATURES + ["WQI"])
+feature = st.selectbox("Select parameter", FEATURES + ["ISQA"])
 
-# -----------------------------
-# WQI FUNCTION (FIXED)
-# -----------------------------
+# ISQA FUNCTION
 def compute_isqa(df):
     # constants
     T_ref = 25
@@ -81,14 +79,14 @@ def compute_isqa(df):
     return isqa
 
 
-def classify_wqi(wqi):
-    if wqi >= 90:
+def classify_isqa(isqa):
+    if isqa >= 90:
         return "Excellent"
-    elif wqi >= 70:
+    elif isqa >= 70:
         return "Good"
-    elif wqi >= 50:
+    elif isqa >= 50:
         return "Medium"
-    elif wqi >= 25:
+    elif isqa >= 25:
         return "Poor"
     else:
         return "Very Poor"
@@ -137,7 +135,7 @@ if st.button("Generate 30-Day Forecast"):
         forecast_df = forecast_30_days(df_filled, session, scaler)
 
     # -----------------------------
-    # COMPUTE WQI
+    # COMPUTE ISQA
     # -----------------------------
     forecast_df['ISQA'] = compute_isqa(forecast_df)
 
@@ -160,34 +158,34 @@ if st.button("Generate 30-Day Forecast"):
         fig = go.Figure()
 
         # HISTORY
-        hist_wqi = hist['ISQA'][-60:]
+        hist_isqa = hist['ISQA'][-60:]
 
         fig.add_trace(go.Scatter(
-            x=hist_wqi.index,
-            y=hist_wqi,
+            x=hist_isqa.index,
+            y=hist_isqa,
             mode='lines',
             name='History',
             hovertemplate=
             "Date: %{x}<br>" +
             "ISQA: %{y:.2f}<br>" +
             "Status: %{customdata}",
-            customdata=[classify_wqi(v) for v in hist_wqi]
+            customdata=[classify_isqa(v) for v in hist_isqa]
         ))
 
         # FORECAST
-        forecast_wqi = forecast_df['WQI']
+        forecast_isqa = forecast_df['ISQA']
 
         fig.add_trace(go.Scatter(
-            x=forecast_wqi.index,
-            y=forecast_wqi,
+            x=forecast_isqa.index,
+            y=forecast_isqa,
             mode='lines',
             name='Forecast',
             line=dict(dash='dash'),
             hovertemplate=
             "Date: %{x}<br>" +
-            "WQI: %{y:.2f}<br>" +
+            "ISQA: %{y:.2f}<br>" +
             "Status: %{customdata}",
-            customdata=[classify_wqi(v) for v in forecast_wqi]
+            customdata=[classify_isqa(v) for v in forecast_isqa]
         ))
 
         fig.update_layout(
@@ -206,12 +204,10 @@ if st.button("Generate 30-Day Forecast"):
         ])
         st.line_chart(chart_df)
 
-    # -----------------------------
-    # WQI SUMMARY
-    # -----------------------------
+    # ISQA SUMMARY
     st.subheader("Water Quality Index Summary")
 
     latest_isqa = forecast_df['ISQA'].iloc[-1]
 
     st.write(f"Latest ISQA: {latest_isqa:.2f}")
-    st.write("Water Quality Status:", classify_wqi(latest_isqa))
+    st.write("Water Quality Status:", classify_isqa(latest_isqa))
