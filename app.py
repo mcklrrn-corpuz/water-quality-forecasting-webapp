@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import joblib
 import plotly.graph_objects as go
-import plotly.graph_objects as go
 import onnxruntime as ort
 
 SEQ_LEN = 30
@@ -14,19 +13,21 @@ HORIZON = 30
 # -----------------------------
 @st.cache_resource
 def load_all():
-    session_gru  = ort.InferenceSession(f"gru_model_{SEQ_LEN}.onnx")
+    session_gru = ort.InferenceSession(f"gru_model_{SEQ_LEN}.onnx")
     session_lstm = ort.InferenceSession(f"lstm_model_{SEQ_LEN}.onnx")
     scaler = joblib.load("scaler.pkl")
     df = pd.read_csv(f"historical_data_{SEQ_LEN}.csv", index_col=0, parse_dates=True)
     return session_gru, session_lstm, scaler, df
 
+
 session_gru, session_lstm, scaler, df_filled = load_all()
 
 FEATURES = [
-    'pH',
-    'specific_conductance',
-    'water_temperature',
-    'dissolved_oxygen'
+    "pH",
+    "specific_conductance",
+    "water_temperature",
+    "dissolved_oxygen",
+    "discharge",
 ]
 
 # -----------------------------
@@ -34,16 +35,18 @@ FEATURES = [
 # -----------------------------
 st.title("Water Quality Forecast (30 Days)")
 
-st.markdown("""
+st.markdown(
+    """
 Select a model:
 
-- **LSTM (Baseline)** — stable predictions  
-- **GRU + Attention (Premium)** — improved accuracy  
-""")
+- **LSTM (Baseline)** — stable predictions
+- **GRU + Attention (Premium)** — improved accuracy
+"""
+)
 
 model_choice = st.selectbox(
     "Choose Model",
-    ["LSTM (Baseline)", "GRU + Attention (Premium)"]
+    ["LSTM (Baseline)", "GRU + Attention (Premium)"],
 )
 
 if "GRU" in model_choice:
@@ -51,41 +54,52 @@ if "GRU" in model_choice:
 else:
     st.info("Baseline model selected: simpler and stable predictions.")
 
-feature = st.selectbox("Select parameter", FEATURES + ["ISQA"])
+feature = st.selectbox("Select parameter", FEATURES + ["WQI"])
 
-# ISQA FUNCTION
-def compute_isqa(df):
-    # constants
+
+# -----------------------------
+# WQI FUNCTION (0–100 SCALE)
+# -----------------------------
+def compute_wqi(df):
+    # reference values
     T_ref = 25
     T_range = 25
     DO_sat = 8
+    pH_ideal = 7
 
-    cond_max = df['specific_conductance'].max()
+    cond_max = df["specific_conductance"].max()
     cond_max = cond_max if cond_max > 0 else 1
 
-    # indices
-    I_temp = 1 - (abs(df['water_temperature'] - T_ref) / T_range)
-    I_do = df['dissolved_oxygen'] / DO_sat
-    I_cond = 1 - (df['specific_conductance'] / cond_max)
+    # indices (0 to 1)
+    I_temp = 1 - (abs(df["water_temperature"] - T_ref) / T_range)
+    I_do = df["dissolved_oxygen"] / DO_sat
+    I_cond = 1 - (df["specific_conductance"] / cond_max)
+    I_pH = 1 - (abs(df["pH"] - pH_ideal) / pH_ideal)
 
     # clip values
     I_temp = I_temp.clip(0, 1)
     I_do = I_do.clip(0, 1)
     I_cond = I_cond.clip(0, 1)
+    I_pH = I_pH.clip(0, 1)
 
-    # modified ISQA
-    isqa = I_temp * (I_do + I_cond)
+    # final WQI (0 to 100)
+    wqi = ((I_temp + I_do + I_cond + I_pH) / 4) * 100
 
-    return isqa
+    return wqi
 
 
-def classify_isqa(isqa):
-    if isqa >= 1.5:
+def classify_wqi(wqi):
+    if wqi >= 90:
+        return "Excellent"
+    elif wqi >= 70:
         return "Good"
-    elif isqa >= 1.0:
+    elif wqi >= 50:
         return "Moderate"
-    else:
+    elif wqi >= 25:
         return "Poor"
+    else:
+        return "Very Poor"
+
 
 # -----------------------------
 # FORECAST FUNCTION
@@ -93,10 +107,11 @@ def classify_isqa(isqa):
 def forecast_30_days(df, session, scaler):
     last_seq = df[FEATURES].iloc[-SEQ_LEN:]
 
-    # FIX scaler issue
     last_scaled = scaler.transform(last_seq.values)
 
-    X_input = last_scaled.reshape(1, SEQ_LEN, len(FEATURES)).astype(np.float32)
+    X_input = last_scaled.reshape(
+        1, SEQ_LEN, len(FEATURES)
+    ).astype(np.float32)
 
     outputs = session.run(None, {"input": X_input})
     future_scaled = outputs[0]
@@ -106,14 +121,15 @@ def forecast_30_days(df, session, scaler):
 
     future_dates = pd.date_range(
         df.index[-1] + pd.Timedelta(days=1),
-        periods=HORIZON
+        periods=HORIZON,
     )
 
     return pd.DataFrame(
         future_actual,
         index=future_dates,
-        columns=FEATURES
+        columns=FEATURES,
     )
+
 
 # -----------------------------
 # RUN
@@ -131,12 +147,12 @@ if st.button("Generate 30-Day Forecast"):
         forecast_df = forecast_30_days(df_filled, session, scaler)
 
     # -----------------------------
-    # COMPUTE ISQA
+    # COMPUTE WQI
     # -----------------------------
-    forecast_df['ISQA'] = compute_isqa(forecast_df)
+    forecast_df["WQI"] = compute_wqi(forecast_df)
 
     hist = df_filled.copy()
-    hist['ISQA'] = compute_isqa(hist)
+    hist["WQI"] = compute_wqi(hist)
 
     # -----------------------------
     # TABLE
@@ -149,61 +165,70 @@ if st.button("Generate 30-Day Forecast"):
     # -----------------------------
     st.subheader(f"{feature} (History vs Forecast)")
 
-    if feature in ["ISQA"]:
-
+    if feature == "WQI":
         fig = go.Figure()
 
         # HISTORY
-        hist_isqa = hist['ISQA'][-60:]
+        hist_wqi = hist["WQI"][-60:]
 
-        fig.add_trace(go.Scatter(
-            x=hist_isqa.index,
-            y=hist_isqa,
-            mode='lines',
-            name='History',
-            hovertemplate=
-            "Date: %{x}<br>" +
-            "ISQA: %{y:.2f}<br>" +
-            "Status: %{customdata}",
-            customdata=[classify_isqa(v) for v in hist_isqa]
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=hist_wqi.index,
+                y=hist_wqi,
+                mode="lines",
+                name="History",
+                hovertemplate=(
+                    "Date: %{x}<br>"
+                    + "WQI: %{y:.2f}<br>"
+                    + "Status: %{customdata}"
+                ),
+                customdata=[classify_wqi(v) for v in hist_wqi],
+            )
+        )
 
         # FORECAST
-        forecast_isqa = forecast_df['ISQA']
+        forecast_wqi = forecast_df["WQI"]
 
-        fig.add_trace(go.Scatter(
-            x=forecast_isqa.index,
-            y=forecast_isqa,
-            mode='lines',
-            name='Forecast',
-            line=dict(dash='dash'),
-            hovertemplate=
-            "Date: %{x}<br>" +
-            "ISQA: %{y:.2f}<br>" +
-            "Status: %{customdata}",
-            customdata=[classify_isqa(v) for v in forecast_isqa]
-        ))
+        fig.add_trace(
+            go.Scatter(
+                x=forecast_wqi.index,
+                y=forecast_wqi,
+                mode="lines",
+                name="Forecast",
+                line=dict(dash="dash"),
+                hovertemplate=(
+                    "Date: %{x}<br>"
+                    + "WQI: %{y:.2f}<br>"
+                    + "Status: %{customdata}"
+                ),
+                customdata=[classify_wqi(v) for v in forecast_wqi],
+            )
+        )
 
         fig.update_layout(
-            title="ISQA (History vs Forecast)",
+            title="WQI (History vs Forecast)",
             xaxis_title="Date",
-            yaxis_title="ISQA",
-            hovermode="x unified"
+            yaxis_title="WQI",
+            hovermode="x unified",
         )
 
         st.plotly_chart(fig, use_container_width=True)
 
     else:
-        chart_df = pd.concat([
-            hist[[feature]].rename(columns={feature: "History"}),
-            forecast_df[[feature]].rename(columns={feature: "Forecast"})
-        ])
+        chart_df = pd.concat(
+            [
+                hist[[feature]].rename(columns={feature: "History"}),
+                forecast_df[[feature]].rename(columns={feature: "Forecast"}),
+            ]
+        )
         st.line_chart(chart_df)
 
-    # ISQA SUMMARY
+    # -----------------------------
+    # WQI SUMMARY
+    # -----------------------------
     st.subheader("Water Quality Index Summary")
 
-    latest_isqa = forecast_df['ISQA'].iloc[-1]
+    latest_wqi = forecast_df["WQI"].iloc[-1]
 
-    st.write(f"Latest ISQA: {latest_isqa:.2f}")
-    st.write("Water Quality Status:", classify_isqa(latest_isqa))
+    st.write(f"Latest WQI: {latest_wqi:.2f}")
+    st.write("Water Quality Status:", classify_wqi(latest_wqi))
