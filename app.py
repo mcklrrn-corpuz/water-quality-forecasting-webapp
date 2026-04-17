@@ -15,7 +15,7 @@ HORIZON = 30
 def load_all():
     session_gru = ort.InferenceSession(f"gru_model_{SEQ_LEN}.onnx")
     session_lstm = ort.InferenceSession(f"lstm_model_{SEQ_LEN}.onnx")
-    scaler = joblib.load("scaler.pkl")
+    scaler = joblib.load(f"scaler_{SEQ_LEN}.pkl")
     df = pd.read_csv(f"historical_data_{SEQ_LEN}.csv", index_col=0, parse_dates=True)
     return session_gru, session_lstm, scaler, df
 
