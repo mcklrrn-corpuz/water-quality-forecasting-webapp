@@ -39,17 +39,17 @@ st.markdown(
     """
 Select a model:
 
-- **LSTM (Baseline)** — stable predictions
-- **GRU + Attention (Premium)** — improved accuracy
+- **GRU + Attention Model (Baseline)**
+- **Enhanced LSTM with Attention Mechanism**
 """
 )
 
 model_choice = st.selectbox(
     "Choose Model",
-    ["LSTM (Baseline)", "GRU + Attention (Premium)"],
+    ["GRU + Attention Model (Baseline)", "Enhanced LSTM with Attention Mechanism (Premium)"],
 )
 
-if "GRU" in model_choice:
+if "Enhanced LSTM with Attention Mechanism" in model_choice:
     st.success("Premium model selected: higher accuracy across most variables.")
 else:
     st.info("Baseline model selected: simpler and stable predictions.")
@@ -57,9 +57,7 @@ else:
 feature = st.selectbox("Select parameter", FEATURES + ["WQI"])
 
 
-# -----------------------------
-# WQI FUNCTION (0–100 SCALE)
-# -----------------------------
+-
 def compute_wqi(df):
     # reference values
     T_ref = 25
