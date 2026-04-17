@@ -56,8 +56,6 @@ else:
 
 feature = st.selectbox("Select parameter", FEATURES + ["WQI"])
 
-
--
 def compute_wqi(df):
     # reference values
     T_ref = 25
