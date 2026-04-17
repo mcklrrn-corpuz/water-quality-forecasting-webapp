@@ -149,7 +149,7 @@ if st.button("Generate 30-Day Forecast"):
     # -----------------------------
     st.subheader(f"{feature} (History vs Forecast)")
 
-    if feature == "ISQA":
+    if feature in ["ISQA"]:
 
         fig = go.Figure()
 
