@@ -80,16 +80,12 @@ def compute_isqa(df):
 
 
 def classify_isqa(isqa):
-    if isqa >= 90:
-        return "Excellent"
-    elif isqa >= 70:
+    if isqa >= 1.5:
         return "Good"
-    elif isqa >= 50:
-        return "Medium"
-    elif isqa >= 25:
-        return "Poor"
+    elif isqa >= 1.0:
+        return "Moderate"
     else:
-        return "Very Poor"
+        return "Poor"
 
 # -----------------------------
 # FORECAST FUNCTION
