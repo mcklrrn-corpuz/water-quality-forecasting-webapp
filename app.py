@@ -134,10 +134,10 @@ if st.button("Generate 30-Day Forecast"):
 
     if "GRU" in model_choice:
         session = session_gru
-        model_label = "GRU + Attention (Premium)"
+        model_label = "GRU + Attention (Baseline)"
     else:
         session = session_lstm
-        model_label = "LSTM (Baseline)"
+        model_label = "Enhanced LSTM with Attention (Premium)"
 
     with st.spinner("Generating forecast..."):
         forecast_df = forecast_30_days(df_filled, session, scaler)
